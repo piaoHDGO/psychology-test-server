@@ -22,8 +22,37 @@ async function initAdminPassword() {
   }
 }
 
+// 初始化默认系统配置（免责声明等）
+async function initSystemSettings() {
+  try {
+    const defaultSettings = [
+      {
+        key: 'disclaimer',
+        value: '本测试结果仅供娱乐参考，不能替代专业的心理咨询或医学诊断。如有心理困扰，请咨询专业心理医生。',
+        description: '测试结果免责声明'
+      },
+      {
+        key: 'content_source',
+        value: '心理测试平台原创内容',
+        description: '内容来源说明'
+      }
+    ]
+
+    for (const setting of defaultSettings) {
+      const existing = await Setting.findOne({ key: setting.key })
+      if (!existing) {
+        await Setting.create(setting)
+        console.log(`已初始化系统配置: ${setting.key}`)
+      }
+    }
+  } catch (error) {
+    console.error('初始化系统配置失败:', error)
+  }
+}
+
 // 初始化调用
 initAdminPassword()
+initSystemSettings()
 
 // 管理员登录
 router.post('/login', async (req, res) => {

@@ -9,6 +9,7 @@ import quizRoutes from './routes/quiz.js'
 import resultRoutes from './routes/result.js'
 import orderRoutes from './routes/order.js'
 import adminAuthRoutes from './routes/adminAuth.js'
+import statsRoutes from './routes/stats.js'
 
 dotenv.config()
 
@@ -25,6 +26,7 @@ app.use('/api/quiz', quizRoutes)
 app.use('/api/result', resultRoutes)
 app.use('/api/order', orderRoutes)
 app.use('/api/admin', adminAuthRoutes)
+app.use('/api/stats', statsRoutes)
 
 // 健康检查
 app.get('/api/health', (req, res) => {
