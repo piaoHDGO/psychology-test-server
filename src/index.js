@@ -34,7 +34,14 @@ async function startServer() {
   try {
     // 连接MongoDB（可选，如果未配置则使用内存存储）
     if (process.env.MONGODB_URI) {
-      await mongoose.connect(process.env.MONGODB_URI)
+      const mongoUri = process.env.MONGODB_URI
+      console.log('🔄 尝试连接MongoDB...')
+      console.log('URI:', mongoUri.replace(/\/\/.*:.*@/, '//***:***@')) // 隐藏密码
+
+      await mongoose.connect(mongoUri, {
+        serverSelectionTimeoutMS: 10000,
+        authSource: 'admin'
+      })
       console.log('✅ MongoDB连接成功')
     } else {
       console.log('⚠️ 未配置MongoDB，使用内存存储（重启数据会丢失）')
@@ -45,6 +52,7 @@ async function startServer() {
     })
   } catch (error) {
     console.error('❌ 启动失败:', error.message)
+    console.error('错误详情:', error)
     // 即使数据库连接失败也启动服务器
     app.listen(PORT, () => {
       console.log(`🚀 服务器运行在 http://localhost:${PORT}（无数据库）`)
