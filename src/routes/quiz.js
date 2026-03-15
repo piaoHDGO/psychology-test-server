@@ -3,10 +3,33 @@ import Quiz from '../models/Quiz.js'
 
 const router = express.Router()
 
-// 获取测试列表
+// 初始化默认测试配置
+const defaultQuizzes = [
+  { code: 'mbti', name: 'MBTI人格测试', description: '28题 · 国际权威人格深度测评', price: 19.9, icon: '🎯', color: '#FFE5E5', category: 'psychology', questionCount: 28, status: 1, paid: 1 },
+  { code: 'color', name: '性格色彩测试', description: '20题 · 深入解读性格色彩密码', price: 9.9, icon: '🎨', color: '#E5FFE5', category: 'psychology', questionCount: 20, status: 1, paid: 1 },
+  { code: 'age', name: '心理成熟度测试', description: '12题 · 探索你的心理成熟度', price: 9.9, icon: '🧠', color: '#E5F0FF', category: 'psychology', questionCount: 12, status: 1, paid: 0 },
+  { code: 'eq', name: 'EQ情商测试', description: '20题 · 测量你的情商水平', price: 9.9, icon: '🧡', color: '#E5FFFF', category: 'psychology', questionCount: 20, status: 1, paid: 1 }
+]
+
+// 初始化测试配置（如果不存在）
+async function initQuizConfigs() {
+  for (const quiz of defaultQuizzes) {
+    await Quiz.findOneAndUpdate(
+      { code: quiz.code },
+      quiz,
+      { upsert: true, new: true }
+    )
+  }
+  console.log('测试配置初始化完成')
+}
+
+// 启动时初始化
+initQuizConfigs().catch(console.error)
+
+// 获取测试列表（只返回配置，不含题目）
 router.get('/list', async (req, res) => {
   try {
-    const quizzes = await Quiz.find({ status: 1 }).select('-questions -results')
+    const quizzes = await Quiz.find({ status: 1 }).select('-__v -createdAt')
     res.json({
       code: 0,
       data: quizzes
@@ -17,10 +40,10 @@ router.get('/list', async (req, res) => {
   }
 })
 
-// 获取所有测试数据（包含题目和结果）
+// 获取所有测试配置（后台管理用，包含上下线状态）
 router.get('/all', async (req, res) => {
   try {
-    const quizzes = await Quiz.find({ status: 1 })
+    const quizzes = await Quiz.find().select('-__v -createdAt')
     res.json({
       code: 0,
       data: quizzes
@@ -31,35 +54,11 @@ router.get('/all', async (req, res) => {
   }
 })
 
-// 获取测试详情
-router.get('/:code', async (req, res) => {
+// 获取单个测试配置
+router.get('/config/:code', async (req, res) => {
   try {
     const { code } = req.params
-    const quiz = await Quiz.findOne({ code, status: 1 })
-
-    if (!quiz) {
-      return res.status(404).json({ code: 404, message: '测试不存在' })
-    }
-
-    // 不返回详细结果
-    const quizData = quiz.toObject()
-    delete quizData.results
-
-    res.json({
-      code: 0,
-      data: quizData
-    })
-  } catch (error) {
-    console.error('获取测试详情失败:', error)
-    res.status(500).json({ code: 500, message: '获取失败' })
-  }
-})
-
-// 获取测试题目（不含结果）
-router.get('/:code/questions', async (req, res) => {
-  try {
-    const { code } = req.params
-    const quiz = await Quiz.findOne({ code, status: 1 }).select('questions name')
+    const quiz = await Quiz.findOne({ code })
 
     if (!quiz) {
       return res.status(404).json({ code: 404, message: '测试不存在' })
@@ -67,26 +66,57 @@ router.get('/:code/questions', async (req, res) => {
 
     res.json({
       code: 0,
-      data: {
-        name: quiz.name,
-        questions: quiz.questions.map(q => ({
-          orderNum: q.orderNum,
-          content: q.content,
-          type: q.type,
-          options: q.options.map(o => ({ text: o.text }))
-        }))
-      }
+      data: quiz
     })
   } catch (error) {
-    console.error('获取题目失败:', error)
+    console.error('获取配置失败:', error)
     res.status(500).json({ code: 500, message: '获取失败' })
   }
 })
 
-// 导入/更新测试数据（从管理后台上传）
+// 更新测试配置（管理后台用）
+router.post('/config', async (req, res) => {
+  try {
+    const { code, name, description, price, icon, color, category, status, paid, questions, results, questionCount } = req.body
+
+    if (!code) {
+      return res.status(400).json({ code: 400, message: '缺少code参数' })
+    }
+
+    const updateData = {}
+    if (name !== undefined) updateData.name = name
+    if (description !== undefined) updateData.description = description
+    if (price !== undefined) updateData.price = price
+    if (icon !== undefined) updateData.icon = icon
+    if (color !== undefined) updateData.color = color
+    if (category !== undefined) updateData.category = category
+    if (status !== undefined) updateData.status = status
+    if (paid !== undefined) updateData.paid = paid
+    if (questions !== undefined) updateData.questions = questions
+    if (results !== undefined) updateData.results = results
+    if (questionCount !== undefined) updateData.questionCount = questionCount
+
+    const quiz = await Quiz.findOneAndUpdate(
+      { code },
+      updateData,
+      { upsert: true, new: true }
+    )
+
+    res.json({
+      code: 0,
+      message: '更新成功',
+      data: quiz
+    })
+  } catch (error) {
+    console.error('更新配置失败:', error)
+    res.status(500).json({ code: 500, message: '更新失败' })
+  }
+})
+
+// 批量更新测试配置（从管理后台上传）
 router.post('/sync', async (req, res) => {
   try {
-    // API密钥验证（生产环境建议使用JWT）
+    // API密钥验证
     const apiKey = req.headers['x-api-key']
     const validKey = process.env.ADMIN_API_KEY || 'admin-sync-key-2024'
     if (apiKey !== validKey) {
@@ -102,7 +132,7 @@ router.post('/sync', async (req, res) => {
     const results = []
 
     for (const quiz of quizzes) {
-      const { code, name, description, price, icon, color, category, questions, results: quizResults, status } = quiz
+      const { code, name, description, price, icon, color, category, questionCount, status, paid, questions } = quiz
 
       const updateData = {
         name,
@@ -111,13 +141,17 @@ router.post('/sync', async (req, res) => {
         icon: icon || '📝',
         color: color || '#667eea',
         category: category || 'psychology',
-        questionCount: questions?.length || 0,
-        questions: questions || [],
-        results: quizResults || {},
-        status: status !== undefined ? status : 1
+        questionCount: questionCount || 0,
+        status: status !== undefined ? status : 1,
+        paid: paid || 0
       }
 
-      const updated = await Quiz.findOneAndUpdate(
+      // 如果有题目数据，一并更新
+      if (questions && Array.isArray(questions)) {
+        updateData.questions = questions
+      }
+
+      await Quiz.findOneAndUpdate(
         { code },
         updateData,
         { upsert: true, new: true }
@@ -134,130 +168,6 @@ router.post('/sync', async (req, res) => {
   } catch (error) {
     console.error('同步数据失败:', error)
     res.status(500).json({ code: 500, message: '同步失败' })
-  }
-})
-
-// 计算结果（需要提交答案）
-router.post('/:code/calculate', async (req, res) => {
-  try {
-    const { code } = req.params
-    const { answers, userId } = req.body
-
-    const quiz = await Quiz.findOne({ code, status: 1 })
-
-    if (!quiz) {
-      return res.status(404).json({ code: 404, message: '测试不存在' })
-    }
-
-    // 计算结果
-    let resultType = ''
-    let resultName = ''
-    let resultDesc = ''
-    let detailReport = ''
-    let careers = []
-
-    if (code === 'mbti') {
-      const scores = { e: 0, i: 0, s: 0, n: 0, t: 0, f: 0, j: 0, p: 0 }
-
-      answers.forEach((answerIndex, qIndex) => {
-        const question = quiz.questions[qIndex]
-        const answer = question.options[answerIndex]
-
-        if (answer.e) scores.e += answer.e
-        if (answer.i) scores.i += answer.i
-        if (answer.s) scores.s += answer.s
-        if (answer.n) scores.n += answer.n
-        if (answer.t) scores.t += answer.t
-        if (answer.f) scores.f += answer.f
-        if (answer.j) scores.j += answer.j
-        if (answer.p) scores.p += answer.p
-      })
-
-      resultType = ''
-      resultType += scores.e >= scores.i ? 'E' : 'I'
-      resultType += scores.s >= scores.n ? 'S' : 'N'
-      resultType += scores.t >= scores.f ? 'T' : 'F'
-      resultType += scores.j >= scores.p ? 'J' : 'P'
-
-      if (quiz.results && quiz.results[resultType]) {
-        const r = quiz.results[resultType]
-        resultName = r.name
-        resultDesc = r.description
-        detailReport = r.detail
-        careers = r.careers || []
-      }
-    } else if (code === 'age') {
-      let totalScore = 0
-      answers.forEach((answerIndex, qIndex) => {
-        const question = quiz.questions[qIndex]
-        const answer = question.options[answerIndex]
-        if (answer.age !== undefined) {
-          totalScore += answer.age
-        }
-      })
-
-      const psychologicalAge = 25 + totalScore
-      resultType = String(psychologicalAge)
-      resultName = `心理年龄 ${psychologicalAge} 岁`
-
-      if (quiz.results && quiz.results.ranges) {
-        const ranges = quiz.results.ranges
-        let result = ranges[ranges.length - 1]
-        for (const r of ranges) {
-          if (psychologicalAge <= r.max) {
-            result = r
-            break
-          }
-        }
-        resultDesc = result.desc
-        detailReport = result.detail
-      }
-    } else if (code === 'color') {
-      const scores = { red: 0, blue: 0, yellow: 0, green: 0 }
-
-      answers.forEach((answerIndex, qIndex) => {
-        const question = quiz.questions[qIndex]
-        const answer = question.options[answerIndex]
-        if (answer.red) scores.red += answer.red
-        if (answer.blue) scores.blue += answer.blue
-        if (answer.yellow) scores.yellow += answer.yellow
-        if (answer.green) scores.green += answer.green
-      })
-
-      const maxScore = Math.max(scores.red, scores.blue, scores.yellow, scores.green)
-      const colorMap = { red: '红色', blue: '蓝色', yellow: '黄色', green: '绿色' }
-
-      if (scores.red === maxScore) resultType = 'red'
-      else if (scores.blue === maxScore) resultType = 'blue'
-      else if (scores.yellow === maxScore) resultType = 'yellow'
-      else resultType = 'green'
-
-      resultName = colorMap[resultType] + '性格'
-
-      if (quiz.results && quiz.results.types) {
-        const result = quiz.results.types.find(t => t.color === resultType)
-        if (result) {
-          resultDesc = result.desc
-          detailReport = result.detail
-          careers = result.strengths || []
-        }
-      }
-    }
-
-    res.json({
-      code: 0,
-      data: {
-        resultType,
-        resultName,
-        resultDesc,
-        detailReport,
-        careers,
-        price: quiz.price
-      }
-    })
-  } catch (error) {
-    console.error('计算结果失败:', error)
-    res.status(500).json({ code: 500, message: '计算失败' })
   }
 })
 

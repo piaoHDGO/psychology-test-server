@@ -103,6 +103,29 @@ router.get('/stats', async (req, res) => {
     // 获取趋势数据
     const trendData = await getTrendData(period)
 
+    // 获取每个测试的统计数据
+    const quizTestCounts = await Stat.aggregate([
+      { $match: { event: 'test_complete', quizCode: { $ne: '' } } },
+      { $group: { _id: '$quizCode', count: { $sum: 1 } } }
+    ])
+
+    // 按quizCode分组统计收入
+    const quizRevenues = await Order.aggregate([
+      { $match: { status: 'paid', quizCode: { $ne: '' } } },
+      { $group: { _id: '$quizCode', revenue: { $sum: '$amount' } } }
+    ])
+
+    // 转换为map便于查找
+    const testCountMap = {}
+    quizTestCounts.forEach(q => {
+      testCountMap[q._id] = q.count
+    })
+
+    const revenueMap = {}
+    quizRevenues.forEach(q => {
+      revenueMap[q._id] = q.revenue
+    })
+
     res.json({
       code: 0,
       data: {
@@ -114,7 +137,9 @@ router.get('/stats', async (req, res) => {
         periodPaidOrders,
         totalRevenue: totalRevenue[0]?.total || 0,
         periodRevenue: periodRevenue[0]?.total || 0,
-        trendData
+        trendData,
+        quizTestCounts: testCountMap,
+        quizRevenues: revenueMap
       }
     })
   } catch (error) {

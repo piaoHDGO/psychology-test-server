@@ -1,21 +1,6 @@
 import mongoose from 'mongoose'
 
-const questionSchema = new mongoose.Schema({
-  orderNum: Number,
-  dimension: String,
-  content: String,
-  type: { type: String, default: 'single' },
-  options: [{
-    text: String,
-    // MBTI计分
-    e: Number, i: Number, s: Number, n: Number, t: Number, f: Number, j: Number, p: Number,
-    // 心理年龄
-    age: Number,
-    // 性格色彩
-    red: Number, blue: Number, yellow: Number, green: Number
-  }]
-}, { _id: false })
-
+// 优化后的Quiz Schema - 只存储配置信息，题目存前端
 const quizSchema = new mongoose.Schema({
   code: {
     type: String,
@@ -28,12 +13,13 @@ const quizSchema = new mongoose.Schema({
   icon: String,
   color: String,
   category: String,
-  questionCount: Number,
-  questions: [questionSchema],
-  results: mongoose.Schema.Types.Mixed,
+  questionCount: {
+    type: Number,
+    default: 0
+  },
   status: {
     type: Number,
-    default: 1
+    default: 1  // 1=上线 0=下线
   },
   paid: {
     type: Number,
